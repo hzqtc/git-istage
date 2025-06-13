@@ -1,6 +1,6 @@
 # git-stage
 
-An interactive command-line utility for quickly staging and unstaging files in a Git repository.  
+An interactive command-line utility for quickly staging and unstaging files in a Git repository.
 
 ![](https://raw.github.com/hzqtc/git-istage/master/demo.gif)
 

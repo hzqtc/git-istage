@@ -28,9 +28,11 @@ type fileEntry struct {
 }
 
 type model struct {
-  files    []fileEntry
-  cursor   int
-  quitting bool
+  files       []fileEntry
+  cursor      int
+  quitting    bool
+  diffMode    bool
+  diffContent string
 }
 
 var (
@@ -62,6 +64,26 @@ func interpretGitStatus(xy string, filename string) (StagingStatus, *exec.Cmd, *
     // Cover cases: ' *'
     return Unstaged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
   }
+}
+
+func getDiff(f *fileEntry) string {
+  var diffCmd *exec.Cmd
+  switch f.status {
+  case Staged:
+    // Diff between staged vs HEAD
+    diffCmd =  exec.Command("git", "d", "--staged", f.name)
+  case Unstaged:
+    // Diff between unstaged vs HEAD
+    diffCmd =  exec.Command("git", "d", f.name)
+  case PartiallyStaged:
+    // Diff between working dir vs HEAD
+    diffCmd =  exec.Command("git", "d", "HEAD", f.name)
+  }
+  out, err := diffCmd.CombinedOutput()
+  if err != nil {
+    return fmt.Sprintf("Failed to show diff: %v", err)
+  }
+  return string(out)
 }
 
 func getGitChanges() ([]fileEntry, error) {
@@ -108,16 +130,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     case "up":
       if m.cursor > 0 {
         m.cursor--
-      } else {
-        m.cursor = len(m.files) - 1
       }
     case "down":
       if m.cursor < len(m.files) - 1 {
         m.cursor++
-      } else {
-        m.cursor = 0
       }
     case " ":
+      if m.diffMode {
+        break;
+      }
       f := &m.files[m.cursor]
       switch f.status {
       case Staged:
@@ -127,7 +148,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         f.stageCmd.Run()
         f.status = Staged
       }
+    case "d":
+      m.diffMode = !m.diffMode
     }
+  }
+  if m.diffMode {
+    m.diffContent = getDiff(&m.files[m.cursor])
   }
   return m, nil
 }
@@ -138,6 +164,12 @@ func (m model) View() string {
   }
 
   var b strings.Builder
+
+  if m.diffMode {
+    b.WriteString(m.diffContent)
+    return b.String()
+  }
+
   for i, f := range m.files {
     var cursor string
     if i == m.cursor {
@@ -157,7 +189,7 @@ func (m model) View() string {
     b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, f.name))
   }
 
-  b.WriteString("\n↑/↓: navigate space: toggle q: quit\n")
+  b.WriteString("\n↑/↓: navigate space: toggle d: diff q: quit\n")
   return b.String()
 }
 

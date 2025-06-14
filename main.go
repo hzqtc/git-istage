@@ -142,7 +142,7 @@ func moveCursorDown(m *model) {
 }
 
 func (m model) Init() tea.Cmd {
-  return tea.EnterAltScreen
+  return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

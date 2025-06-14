@@ -33,8 +33,8 @@ type model struct {
   quitting        bool
   diffMode        bool
   diffContent     string
-	scrollOffset    int
-	viewportHeight  int
+  scrollOffset    int
+  viewportHeight  int
 }
 
 var (
@@ -119,7 +119,12 @@ func getGitChanges() ([]fileEntry, error) {
 }
 
 func getMaxScroll(m *model) int {
-  return len(strings.Split(m.diffContent, "\n")) - m.viewportHeight
+  lines := len(strings.Split(m.diffContent, "\n"))
+  if lines > m.viewportHeight {
+    return lines - m.viewportHeight
+  } else {
+    return 0
+  }
 }
 
 func moveCursorUp(m *model) {
@@ -172,6 +177,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
       } else {
         moveCursorDown(&m)
       }
+    case "pgdown":
+      if m.diffMode {
+        maxScroll := getMaxScroll(&m)
+        newScrollOffset := m.scrollOffset + m.viewportHeight / 2
+        if newScrollOffset > maxScroll {
+          newScrollOffset = maxScroll
+        }
+        m.scrollOffset = newScrollOffset
+      }
+    case "pgup":
+      if m.diffMode {
+        newScrollOffset := m.scrollOffset - m.viewportHeight / 2
+        if newScrollOffset < 0 {
+          newScrollOffset = 0
+        }
+        m.scrollOffset = newScrollOffset
+      }
     case " ":
       if m.diffMode {
         break;
@@ -221,7 +243,11 @@ func (m model) View() string {
     visibleLines := lines[m.scrollOffset:end]
 
     b.WriteString(strings.Join(visibleLines, "\n"))
-    b.WriteString(fmt.Sprintf("\n↑/↓ scroll (%d/%d)  d: back  g: top  G: bottom  q: quit\n", end, len(lines)))
+    b.WriteString(fmt.Sprintf(
+      "\n↑/↓/PageUp/PageDown scroll (%d/%d)  g: top  G: bottom  d: back  q: quit\n",
+      end,
+      len(lines),
+    ))
     return b.String()
   }
 

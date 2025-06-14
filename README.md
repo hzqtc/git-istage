@@ -35,5 +35,9 @@ git istage
 - ↑/↓ – navigate files
 - space – stage/unstage selected file
 - d - view diff (both staged/unstaged change vs HEAD)
+  - ↑/↓ - scroll by 1 line
+  - PgUp/PgDown - scroll by half screen
+  - g - scroll to top
+  - G - scroll to bottom
 - q or Ctrl+C – quit
 

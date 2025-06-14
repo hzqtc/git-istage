@@ -28,11 +28,13 @@ type fileEntry struct {
 }
 
 type model struct {
-  files       []fileEntry
-  cursor      int
-  quitting    bool
-  diffMode    bool
-  diffContent string
+  files           []fileEntry
+  cursor          int
+  quitting        bool
+  diffMode        bool
+  diffContent     string
+	scrollOffset    int
+	viewportHeight  int
 }
 
 var (
@@ -116,24 +118,59 @@ func getGitChanges() ([]fileEntry, error) {
   return files, nil
 }
 
+func getMaxScroll(m *model) int {
+  return len(strings.Split(m.diffContent, "\n")) - m.viewportHeight
+}
+
+func moveCursorUp(m *model) {
+  if m.cursor > 0 {
+    m.cursor--
+    m.scrollOffset = 0
+  }
+}
+
+func moveCursorDown(m *model) {
+  if m.cursor < len(m.files) - 1 {
+    m.cursor++
+    m.scrollOffset = 0
+  }
+}
+
 func (m model) Init() tea.Cmd {
-  return nil
+  return tea.EnterAltScreen
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
   switch msg := msg.(type) {
+  case tea.WindowSizeMsg:
+    m.viewportHeight = msg.Height - len(m.files) - 1
+    return m, nil
   case tea.KeyMsg:
     switch msg.String() {
     case "ctrl+c", "q":
       m.quitting = true
       return m, tea.Quit
     case "up":
-      if m.cursor > 0 {
-        m.cursor--
+      if m.diffMode {
+        if m.scrollOffset > 0 {
+          m.scrollOffset--
+        } else {
+          // Go to previous file if at top of scroll
+          moveCursorUp(&m)
+        }
+      } else {
+        moveCursorUp(&m)
       }
     case "down":
-      if m.cursor < len(m.files) - 1 {
-        m.cursor++
+      if m.diffMode {
+        if m.scrollOffset < getMaxScroll(&m) {
+          m.scrollOffset++
+        } else {
+          // Go to next file if at top of scroll
+          moveCursorDown(&m)
+        }
+      } else {
+        moveCursorDown(&m)
       }
     case " ":
       if m.diffMode {
@@ -150,10 +187,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
       }
     case "d":
       m.diffMode = !m.diffMode
+    case "g":
+      if m.diffMode {
+        m.scrollOffset = 0
+      }
+    case "G":
+      if m.diffMode {
+        m.scrollOffset = getMaxScroll(&m)
+      }
     }
-  }
-  if m.diffMode {
-    m.diffContent = getDiff(&m.files[m.cursor])
+    if m.diffMode {
+      m.diffContent = getDiff(&m.files[m.cursor])
+    }
   }
   return m, nil
 }
@@ -166,7 +211,17 @@ func (m model) View() string {
   var b strings.Builder
 
   if m.diffMode {
-    b.WriteString(m.diffContent)
+    lines := strings.Split(m.diffContent, "\n")
+
+    // Slice visible lines
+    end := m.scrollOffset + m.viewportHeight
+    if end > len(lines) {
+      end = len(lines)
+    }
+    visibleLines := lines[m.scrollOffset:end]
+
+    b.WriteString(strings.Join(visibleLines, "\n"))
+    b.WriteString(fmt.Sprintf("\n↑/↓ scroll (%d/%d)  d: back  g: top  G: bottom  q: quit\n", end, len(lines)))
     return b.String()
   }
 
@@ -189,7 +244,7 @@ func (m model) View() string {
     b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, f.name))
   }
 
-  b.WriteString("\n↑/↓: navigate space: toggle d: diff q: quit\n")
+  b.WriteString("\n↑/↓: navigate  space: toggle  d: diff  q: quit\n")
   return b.String()
 }
 

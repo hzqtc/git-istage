@@ -34,5 +34,6 @@ git istage
 
 - ↑/↓ – navigate files
 - space – stage/unstage selected file
+- d - view diff (both staged/unstaged change vs HEAD)
 - q or Ctrl+C – quit
 

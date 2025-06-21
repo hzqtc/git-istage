@@ -1,5 +1,5 @@
-BINARY_NAME=git-istage
-SRC=main.go
+BINARY_NAME = git-istage
+SRC = main.go
 GOBIN = $(HOME)/.local/bin
 
 all: build

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -45,16 +46,16 @@ func interpretGitStatus(xy string, filename string) (StagingStatus, *exec.Cmd, *
 	switch {
 	case x == '?' && y == '?':
 		// Cover cases: '??'
-		return Unstaged, exec.Command("git", "add", filename), exec.Command("git", "rm", "--cached", filename)
+		return Unstaged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
 	case x == 'A' && y != ' ':
 		// Cover cases: 'AM'
-		return PartiallyStaged, exec.Command("git", "add", filename), exec.Command("git", "rm", "--cached", filename)
+		return PartiallyStaged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
 	case x != ' ' && y != ' ':
 		// Cover cases: '*M'
 		return PartiallyStaged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
 	case x == 'A':
 		// Cover cases: 'A '
-		return Staged, exec.Command("git", "add", filename), exec.Command("git", "rm", "--cached", filename)
+		return Staged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
 	case x != ' ':
 		// Cover cases: '* '
 		return Staged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
@@ -73,23 +74,33 @@ func getGitChanges() ([]fileEntry, error) {
 	}
 
 	// Get porcelain status
-	cmd := exec.Command("git", "status", "--porcelain")
-	out, err := cmd.Output()
+	statusCmd := exec.Command("git", "status", "--porcelain")
+	out, err := statusCmd.Output()
 	if err != nil {
 		return nil, err
 	}
 
+	// Get the git root
+	gitRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	gitRootBytes, _ := gitRootCmd.Output()
+	gitRoot := strings.TrimSpace(string(gitRootBytes))
+	// Get cwd
+	cwd, _ := os.Getwd()
+
 	var files []fileEntry
-	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if len(line) < 4 {
 			continue
 		}
 		// The first 2 letters on each line of `git status --porcelain` output represent status
 		xy := line[:2]
-		filename := strings.TrimSpace(line[3:])
-		status, stageCmd, unstageCmd := interpretGitStatus(xy, filename)
-		files = append(files, fileEntry{name: filename, status: status, stageCmd: stageCmd, unstageCmd: unstageCmd})
+		// `git status --porcelain` always output file path relative to git root
+		filepathFromGitRoot := strings.TrimSpace(line[3:])
+		// So we need to convert it to relative path to CWD
+		absPath := filepath.Join(gitRoot, filepathFromGitRoot)
+		relPath, _ := filepath.Rel(cwd, absPath)
+		status, stageCmd, unstageCmd := interpretGitStatus(xy, relPath)
+		files = append(files, fileEntry{name: filepathFromGitRoot, status: status, stageCmd: stageCmd, unstageCmd: unstageCmd})
 	}
 	return files, nil
 }

@@ -116,27 +116,49 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			m.quitting = true
 			return m, tea.Quit
-		case "up":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down":
-			if m.cursor < len(m.files)-1 {
-				m.cursor++
-			}
+		case "up", "k":
+			m.cursorUp()
+		case "down", "j":
+			m.cursorDown()
 		case " ":
-			f := &m.files[m.cursor]
-			switch f.status {
-			case Staged:
-				f.unstageCmd.Run()
-				f.status = Unstaged
-			case PartiallyStaged, Unstaged:
-				f.stageCmd.Run()
-				f.status = Staged
+			m.toggle(m.cursor)
+		case "a":
+			for i := range len(m.files) {
+				m.toggle(i)
 			}
+		case "tab":
+			m.toggle(m.cursor)
+			m.cursorDown()
+		case "shift+tab":
+			m.toggle(m.cursor)
+			m.cursorUp()
 		}
 	}
 	return m, nil
+}
+
+func (m *model) cursorUp() {
+	if m.cursor > 0 {
+		m.cursor--
+	}
+}
+
+func (m *model) cursorDown() {
+	if m.cursor < len(m.files)-1 {
+		m.cursor++
+	}
+}
+
+func (m *model) toggle(index int) {
+	f := &m.files[index]
+	switch f.status {
+	case Staged:
+		f.unstageCmd.Run()
+		f.status = Unstaged
+	case PartiallyStaged, Unstaged:
+		f.stageCmd.Run()
+		f.status = Staged
+	}
 }
 
 func (m model) View() string {
@@ -164,7 +186,7 @@ func (m model) View() string {
 		b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, f.name))
 	}
 
-	b.WriteString("\n↑/↓: navigate  space: toggle  q: quit\n")
+	b.WriteString("\nj/k/↑/↓: navigate | space: toggle | a: toggle all | q: quit\n")
 	return b.String()
 }
 
@@ -177,7 +199,7 @@ func main() {
 
 	if len(files) == 0 {
 		fmt.Println("No changes to stage or unstage.")
-		return
+		os.Exit(0)
 	}
 
 	m := model{files: files}

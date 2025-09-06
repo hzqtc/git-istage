@@ -20,12 +20,9 @@ const (
 )
 
 type fileEntry struct {
-	name   string
-	status StagingStatus
-	// Command to stage, or re-stage after unstaging
-	stageCmd *exec.Cmd
-	// Command to unstage, or re-unstage after staging
-	unstageCmd *exec.Cmd
+	pathFromGitRoot string
+	pathFromCwd     string
+	status          StagingStatus
 }
 
 type model struct {
@@ -40,28 +37,28 @@ var (
 	unstagedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
-func interpretGitStatus(xy string, filename string) (StagingStatus, *exec.Cmd, *exec.Cmd) {
+func interpretGitStatus(xy string) StagingStatus {
 	x, y := xy[0], xy[1]
 
 	switch {
 	case x == '?' && y == '?':
 		// Cover cases: '??'
-		return Unstaged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
+		return Unstaged
 	case x == 'A' && y != ' ':
 		// Cover cases: 'AM'
-		return PartiallyStaged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
+		return PartiallyStaged
 	case x != ' ' && y != ' ':
 		// Cover cases: '*M'
-		return PartiallyStaged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
+		return PartiallyStaged
 	case x == 'A':
 		// Cover cases: 'A '
-		return Staged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
+		return Staged
 	case x != ' ':
 		// Cover cases: '* '
-		return Staged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
+		return Staged
 	default:
 		// Cover cases: ' *'
-		return Unstaged, exec.Command("git", "add", filename), exec.Command("git", "restore", "--staged", filename)
+		return Unstaged
 	}
 }
 
@@ -94,13 +91,13 @@ func getGitChanges() ([]fileEntry, error) {
 		}
 		// The first 2 letters on each line of `git status --porcelain` output represent status
 		xy := line[:2]
+		status := interpretGitStatus(xy)
 		// `git status --porcelain` always output file path relative to git root
-		filepathFromGitRoot := strings.TrimSpace(line[3:])
+		pathFromGitRoot := strings.TrimSpace(line[3:])
 		// So we need to convert it to relative path to CWD
-		absPath := filepath.Join(gitRoot, filepathFromGitRoot)
-		relPath, _ := filepath.Rel(cwd, absPath)
-		status, stageCmd, unstageCmd := interpretGitStatus(xy, relPath)
-		files = append(files, fileEntry{name: filepathFromGitRoot, status: status, stageCmd: stageCmd, unstageCmd: unstageCmd})
+		absPath := filepath.Join(gitRoot, pathFromGitRoot)
+		pathFromCwd, _ := filepath.Rel(cwd, absPath)
+		files = append(files, fileEntry{pathFromGitRoot, pathFromCwd, status})
 	}
 	return files, nil
 }
@@ -153,10 +150,10 @@ func (m *model) toggle(index int) {
 	f := &m.files[index]
 	switch f.status {
 	case Staged:
-		f.unstageCmd.Run()
+		exec.Command("git", "restore", "--staged", f.pathFromCwd).Run()
 		f.status = Unstaged
 	case PartiallyStaged, Unstaged:
-		f.stageCmd.Run()
+		exec.Command("git", "add", f.pathFromCwd).Run()
 		f.status = Staged
 	}
 }
@@ -183,7 +180,7 @@ func (m model) View() string {
 		case Unstaged:
 			checkbox = unstagedStyle.Render("[ ]")
 		}
-		b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, f.name))
+		b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, f.pathFromGitRoot))
 	}
 
 	b.WriteString("\nj/k/↑/↓: navigate | space: toggle | a: toggle all | q: quit\n")

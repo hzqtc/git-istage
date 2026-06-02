@@ -45,9 +45,10 @@ type model struct {
 }
 
 var (
-	cursorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-	stagedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	unstagedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	cursorStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	stagedStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	partiallyStagedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	unstagedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
 var gitRootPath = func() string {
@@ -277,7 +278,7 @@ func (m model) View() string {
 		case staged:
 			checkbox = stagedStyle.Render("[✓]")
 		case partiallyStaged:
-			checkbox = unstagedStyle.Render("[~]")
+			checkbox = partiallyStagedStyle.Render("[~]")
 		case unstaged:
 			checkbox = unstagedStyle.Render("[ ]")
 		}
